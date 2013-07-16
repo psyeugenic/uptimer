@@ -46,14 +46,13 @@ init(Data)  -> init(Data, #state{}).
 init([{host, Host}|Data], S) -> init(Data, S#state{ host  = Host });
 init([{timer, T}|Data], S)   -> init(Data, S#state{ timer = T });
 init([_|Data], S)            -> init(Data, S);
-init([], S)                  -> {ok, setup_request(S)}.
+init([], S)                  -> {ok, inform_and_setup_status(S)}.
 
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+handle_call(_Request, _From, S) ->
+    {reply, ok, S}.
 
 handle_info(request_status, S) ->
-    S1 = inform_status(host_status(S), S),
-    {noreply, setup_request(S1)};
+    {noreply, inform_and_setup_status(S)};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -70,6 +69,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+inform_and_setup_status(S) ->
+    Status = host_status(S),
+    setup_request(inform_status(Status, S)).
 
 inform_status({Status, Vs}, S) ->
     inform_status(Status, Vs, S).
@@ -88,7 +91,6 @@ inform_status(Status, Vs, #state{} = S) ->
 
 inform_service(Status, Vs, #state{ service = Service, host = Host }) ->
     gen_server:cast(Service, {status, Host, Status, [
-		{worker, self()},
 		{seen, datetime_string()}|Vs]}).
     
 host_status(S) ->

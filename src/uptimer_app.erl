@@ -18,15 +18,16 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    {ok, [{hosts, Hosts}]} = file:consult("test/hosts.dat"),
-    Res = uptimer_sup:start_link(),
-    start_children(Hosts),
-    Res.
+    %{ok, [{hosts, Hosts}]} = file:consult("test/hosts.dat"),
+    %Res = uptimer_sup:start_link(),
+    %start_children(Hosts),
+    %Res.
+    uptimer_sup:start_link().
 
-start_children([]) -> ok;
-start_children([Host|Hosts]) ->
-    supervisor:start_child(uptimer_worker_sup,[[{host, Host}]]),
-    start_children(Hosts).
+%start_children([]) -> ok;
+%start_children([Host|Hosts]) ->
+%    supervisor:start_child(uptimer_worker_sup,[[{host, Host}]]),
+%    start_children(Hosts).
 
 stop(_State) ->
     ok.
