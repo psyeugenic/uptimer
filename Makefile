@@ -22,3 +22,8 @@ distclean: clean
 
 docs:
 	$(ERL) -noshell -run edoc_run application '$(APP)' '"."' '[]'
+
+
+test: all
+	@./rebar ct
+
