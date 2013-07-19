@@ -9,4 +9,4 @@
 
 -define(host_down, unreachable).
 -define(host_up,   reachable).
--define(DEFAULT_REQUEST_TIME, 1000*20). % 20 secs
+-define(DEFAULT_REQUEST_TIME, 1000*5). % 20 secs

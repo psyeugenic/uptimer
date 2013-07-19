@@ -30,6 +30,7 @@ stop()       -> application:stop(uptimer).
 start_link() -> uptimer_sup:start_link().
 start()      ->
     ensure_started(crypto),
+    ensure_started(asn1),
     ensure_started(public_key),
     ensure_started(ssh),
     ensure_started(uptimer).

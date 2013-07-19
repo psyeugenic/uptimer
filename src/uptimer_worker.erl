@@ -63,13 +63,15 @@ handle_info({P, {data,"PING"++_ = Msg}}, #state{ port=P }=S) ->
     inform_service(Status, Vs, S),
     {noreply, S};
 
-handle_info(?request(ssh), #state{ ssh=Con }=S) ->
-    Res = uptimer_ssh:exec(Con, "uptime"),
-    io:format("ssh res ~p~n", [Res]),
+handle_info(?request(ssh), #state{ ssh=ConRef }=S) ->
+    %Res = uptimer_ssh:exec(ConRef, "uptime"),
+    {ok, Channel} = ssh_connection:session_channel(ConRef, infinity),
+    io:format("ssh res ~p~n", [Channel]),
+    success = ssh_connection:exec(ConRef, Channel, "uptime", infinity),
     {noreply, setup_request(ssh,S)};
 
 handle_info(_Info, S) ->
-    %io:format("info: ~p~n", [_Info]),
+    io:format("info: ~p~n", [_Info]),
     {noreply, S}.
 
 handle_cast(_Msg, S) ->
@@ -92,9 +94,14 @@ setup_reporters(#state{ reports=Rs0 } = S) ->
 
 setup_reporters([], S) -> S;
 setup_reporters([ssh|Rs], #state{ host=Host }=S) ->
+    {ok, ConRef} = ssh:connect(Host, 22, [
+	    {silently_accept_hosts, true},
+	    {user_interaction, false}
+	]),
     self() ! ?request(ssh),
     setup_reporters(Rs, setup_request(ssh, S#state{
-		ssh = uptimer_ssh:connect(Host)
+		ssh = ConRef
+		%ssh = uptimer_ssh:connect(Host)
 	    }));
 setup_reporters([ping|Rs], S) ->
     self() ! ?request(ping),
