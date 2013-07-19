@@ -11,7 +11,7 @@
 
 %% API
 -export([
-	connect/2, connect/3,
+	connect/1, connect/2,
 	exec/2, exec/3,
 	close/1
     ]).
@@ -36,13 +36,13 @@
 %%% API
 %%%===================================================================
 
-connect(User, Host) -> connect(User, Host, 22).
-connect(User, Host, Port) ->
-    {ok, Cm} = ssh:connect(Host, Port, [
-	    {user, User},
-	    {user_interaction, false},	
-	    {silently_accept_hosts, true}
-	]),
+connect(Host) -> connect(Host, []).
+connect(Host, Opts) ->
+    Port     = proplists:get_value(port, Opts, 22),
+    {ok, Cm} = ssh:connect(Host, Port, ssh_opts(Opts, [
+		{user_interaction, false},	
+		{silently_accept_hosts, true}
+	    ])),
     {?MODULE, Cm}.
 
 close({?MODULE, Cm}) ->
@@ -50,11 +50,10 @@ close({?MODULE, Cm}) ->
 
 %% exec/2 -> {exit_status(), [stdout()], [stderr()]}
 exec(Ref, Cmd) -> exec(Ref, Cmd, infinity).
-exec({?MODULE, Cm}, Cmd, Timeout) ->
-    {ok, ChannelId} = ssh_connection:session_channel(Cm, infinity),
-    {ok, Pid} = ssh_channel:start(Cm, ChannelId, ?MODULE, [Cm, ChannelId, Timeout]),
+exec({?MODULE, Cm}, Cmd, Tmo) ->
+    {ok, Cid} = ssh_connection:session_channel(Cm, infinity),
+    {ok, Pid} = ssh_channel:start_link(Cm, Cid, ?MODULE, [Cm, Cid, Tmo]),
     ssh_channel:call(Pid, {exec, Cmd}, infinity).
-
 
 %%%===================================================================
 %%% ssh_channel callbacks
@@ -108,3 +107,7 @@ code_change(_OldVsn, S, _Extra) ->
 
 update_data(0, Data, #state{ std=Std } = S) -> S#state{ std=[Data|Std] };
 update_data(1, Data, #state{ err=Err } = S) -> S#state{ err=[Data|Err] }.
+
+ssh_opts([{user, _}=Opt|Os], Opts) -> ssh_opts(Os, [Opt|Opts]);
+ssh_opts([_|Os], Opts) -> ssh_opts(Os, Opts);
+ssh_opts([], Opts) -> Opts.

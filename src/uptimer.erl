@@ -28,7 +28,11 @@ ensure_started(App) ->
 
 stop()       -> application:stop(uptimer).
 start_link() -> uptimer_sup:start_link().
-start()      -> ensure_started(uptimer).
+start()      ->
+    ensure_started(crypto),
+    ensure_started(public_key),
+    ensure_started(ssh),
+    ensure_started(uptimer).
 
 
 add_host(Host)       -> add_host(Host, []).

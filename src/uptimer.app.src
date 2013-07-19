@@ -1,11 +1,13 @@
 {application, uptimer,
  [
   {description, ""},
-  {vsn, "1.0"}, % git
+  {vsn, "0.1"}, % git
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+		  ssh,
+		  crypto
                  ]},
   {mod, { uptimer_app, []}},
   {env, []}

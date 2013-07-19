@@ -46,9 +46,10 @@ start_link() ->
 hosts(Req, Opts) ->
     gen_server:call(?SERVER, {hosts, Req, Opts}).
 
-add_host(Host, Opts) -> gen_server:call(?SERVER, {add_host, Host, Opts}).
 del_host(Host, Opts) -> gen_server:call(?SERVER, {del_host, Host, Opts}).
 get_host(Host, Opts) -> gen_server:call(?SERVER, {get_host, Host, Opts}).
+add_host(Host, Opts) ->
+    gen_server:call(?SERVER, {add_host, Host, [{service,?MODULE}|Opts]}).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -68,11 +69,11 @@ handle_call({hosts, down, _}, _From, #state{ hosts=T } = S) ->
 	end, [], gb_trees:to_list(T)),
     {reply, Hs, S};
 
-handle_call({add_host, Host, _}, _From, #state{ hosts=T } = S) ->
+handle_call({add_host, Host, Opts}, _From, #state{ hosts=T } = S) ->
     case gb_trees:is_defined(Host, T) of
 	true  -> {reply, {error, already_added}, S};
 	false ->
-	    Args = [[{host, Host}]],
+	    Args = [[{host, Host}|Opts]],
 	    {ok, Pid} = supervisor:start_child(uptimer_worker_sup,Args),
 	    {reply, ok, S#state{
 		    hosts = gb_trees:enter(Host, #host{
