@@ -11,7 +11,7 @@
 
 %% API
 -export([
-	connect/1, connect/2,
+	connect/2, connect/3,
 	exec/2, exec/3,
 	close/1
     ]).
@@ -36,9 +36,13 @@
 %%% API
 %%%===================================================================
 
-connect(Host) -> connect(Host, 22).
-connect(Host, Port) ->
-    {ok, Cm} = ssh:connect(Host, Port, []),
+connect(User, Host) -> connect(User, Host, 22).
+connect(User, Host, Port) ->
+    {ok, Cm} = ssh:connect(Host, Port, [
+	    {user, User},
+	    {user_interaction, false},	
+	    {silently_accept_hosts, true}
+	]),
     {?MODULE, Cm}.
 
 close({?MODULE, Cm}) ->
@@ -67,8 +71,7 @@ init([Manager,ChannelId,Timeout]) ->
 %% Handles channel messages
 handle_msg({ssh_channel_up,_Channel,_Manager}, S) ->
     {ok, S};
-handle_msg(Msg, S) ->
-    io:format("handle_msg: ~p~n", [Msg]),
+handle_msg(_Msg, S) ->
     {ok, S}.
 
 %% handle_ssh_msg(Msg, State) -> {ok, State} | {stop, ChannelId, State}
@@ -79,22 +82,16 @@ handle_ssh_msg({ssh_cm, _Manager, {data,_,Type,Data}}, S) ->
     {ok, update_data(Type, Data, S)};
 handle_ssh_msg({ssh_cm, _Manager, {eof,Channel}}, S) ->
     {stop, Channel, S};
-handle_ssh_msg(Msg, S) ->
-    io:format("handle_ssh_msg: ~p~n", [Msg]),
+handle_ssh_msg(_Msg, S) ->
     {ok, S}.
 
-%% handle_call(Msg, From, State) -> 
-%%     {reply, Reply, NewState} | {reply, Reply, NewState, timeout()} |
-%%     {noreply, NewState}      | {noreply , NewState, timeout()} |
-%%     {stop, Reason, Reply, NewState} | {stop, Reason, NewState}
-
+%% handle_call(Msg, From, State)
 handle_call({exec, Cmd}, From, #state{ manager=Cm, channel=Id, timeout=Tmo}=S) ->
     success = ssh_connection:exec(Cm, Id, Cmd, Tmo),
     {noreply, S#state{ from=From }};
 
-handle_call(Request, _From, S) ->
-    io:format("request: ~p~n", [Request]),
-    {reply, ok, S}.
+handle_call(_Request, _From, S) ->
+    {reply, no_action, S}.
 
 handle_cast(_Msg, S) ->
     {noreply, S}.
