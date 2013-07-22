@@ -23,6 +23,11 @@
 -define(SERVER, ?MODULE).
 -define(request(T), {request_status, T}).
 
+%-define(b2f(B), erlang:binary_to_float(B)).
+%-define(b2i(B), erlang:binary_to_integer(B)).
+-define(b2f(B), list_to_float(binary_to_list(B))).
+-define(b2i(B), list_to_integer(binary_to_list(B))).
+
 -record(state, {
 	timers    = gb_trees:empty(),
 	timer     = ?DEFAULT_REQUEST_TIME,
@@ -30,7 +35,7 @@
 	service   = undefined,
 	ssh       = undefined, % ssh connection
 	port      = undefined, % used for ping
-	reports   = [ping,ssh]
+	reports   = [ping]
     }).
 
 %%%===================================================================
@@ -64,9 +69,12 @@ handle_info({P, {data,"PING"++_ = Msg}}, #state{ port=P }=S) ->
     {noreply, S};
 
 handle_info(?request(ssh), #state{ ssh=ConRef }=S) ->
-    %Res = uptimer_ssh:exec(ConRef, "uptime"),
-    {ok, Channel} = ssh_connection:session_channel(ConRef, infinity),
-    success = ssh_connection:exec(ConRef, Channel, "uptime", infinity),
+    case uptimer_ssh:exec(ConRef, "LANG=C uptime") of
+	{0, Value, _} ->
+	    Uptime = parse_uptime(Value),
+	    io:format("Uptime: ~p~n", [Uptime]);
+	    _ -> ok
+    end,
     {noreply, setup_request(ssh,S)};
 
 handle_info(_Info, S) ->
@@ -91,15 +99,18 @@ setup_reporters(#state{ reports=Rs0 } = S) ->
 
 setup_reporters([], S) -> S;
 setup_reporters([ssh|Rs], #state{ host=Host }=S) ->
-    {ok, ConRef} = ssh:connect(Host, 22, [
-	    {silently_accept_hosts, true},
-	    {user_interaction, false}
-	]),
-    self() ! ?request(ssh),
-    setup_reporters(Rs, setup_request(ssh, S#state{
-		ssh = ConRef
-		%ssh = uptimer_ssh:connect(Host)
-	    }));
+    try
+	ConRef = uptimer_ssh:connect(Host),
+	self() ! ?request(ssh),
+	setup_reporters(Rs, setup_request(ssh, S#state{
+		    ssh = ConRef
+		}))
+    catch
+	error:_ ->
+	    Msg = io_lib:format("Failed to setup ssh service for host: ~s~n", [Host]),
+	    error_logger:error_msg(Msg),
+	    setup_reporters(Rs, S)
+    end;
 setup_reporters([ping|Rs], S) ->
     self() ! ?request(ping),
     setup_reporters(Rs, setup_request(ping, S#state{
@@ -123,6 +134,28 @@ datetime_string({{Y,Mon,D},{H,Min,S}}) ->
     iolist_to_binary((io_lib:format(Format, [Y,Mon,D,H,Min,S]))).
 
 
+% master egil@palantir /ldisk/egil/git/uptimer $ ssh ..  "LANG=C uptime"
+%   2:25pm  up 194 days  1:23,  15 users,  load average: 0.00, 0.00, 0.00
+
+parse_uptime(Vs) ->
+    ReOpts = [global, {capture, all_but_first, binary}],
+    Match  = "up ([0-9]+) days,\\s+([0-9]+):([0-9]+),\\s+([0-9]+) users,"
+	     "\\s+load average: ([0-9]+\\.[0-9]+),\\s+([0-9]+\\.[0-9]+),\\s+([0-9]+\\.[0-9]+)",
+    case re:run(list_to_binary(Vs), Match, ReOpts) of
+	{match,[[Days,Hours,Mins,Users,Load1,Load5,Load15]]} -> [
+		{uptime, [{days,    ?b2i(Days)},
+			  {hours,   ?b2i(Hours)},
+			  {minutes, ?b2i(Mins)}
+		      ]},
+		{users, ?b2i(Users)},
+		{load,  [{ 1, ?b2f(Load1)},
+			 { 5, ?b2f(Load5)},
+		 	 {15, ?b2f(Load15)}
+		    ]}
+	    ];
+	_ -> []
+    end.
+
 % PING www.google.se (173.194.40.24) 56(84) bytes of data.
 % 64 bytes from mil02s06-in-f24.1e100.net (173.194.40.24): icmp_req=1 ttl=46 time=39.6 ms
 % 
@@ -137,7 +170,7 @@ parse_ping(PingMsg) ->
 	    {match, [[From]]} = re:run(PingMsg, "bytes from (.*) \\(", ReOpts),
 	    {?host_up, [
 		    {host, From}, 
-		    {time, erlang:binary_to_float(Time)}]};
+		    {time, ?b2f(Time)}]};
 	_ ->
 	    {?host_down, []}
     end.
@@ -151,3 +184,4 @@ command(Port,Cmd) ->
     Data = io_lib:format("(~s\n) </dev/null; echo  \"\^M\"\n", [Cmd]),
     Port ! {self(), {command, [Data, 10]}},
     ok.
+
