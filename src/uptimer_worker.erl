@@ -66,12 +66,10 @@ handle_info({P, {data,"PING"++_ = Msg}}, #state{ port=P }=S) ->
 handle_info(?request(ssh), #state{ ssh=ConRef }=S) ->
     %Res = uptimer_ssh:exec(ConRef, "uptime"),
     {ok, Channel} = ssh_connection:session_channel(ConRef, infinity),
-    io:format("ssh res ~p~n", [Channel]),
     success = ssh_connection:exec(ConRef, Channel, "uptime", infinity),
     {noreply, setup_request(ssh,S)};
 
 handle_info(_Info, S) ->
-    io:format("info: ~p~n", [_Info]),
     {noreply, S}.
 
 handle_cast(_Msg, S) ->
@@ -88,7 +86,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 
 setup_reporters(#state{ reports=Rs0 } = S) ->
-    io:format("worker did init!~n"),
     Rs = lists:usort(Rs0),
     setup_reporters(Rs, S#state{ reports=Rs }).
 
